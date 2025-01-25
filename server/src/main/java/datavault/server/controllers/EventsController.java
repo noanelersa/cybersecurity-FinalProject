@@ -1,9 +1,10 @@
 package datavault.server.controllers;
 
 import datavault.server.dto.EventDTO;
-import datavault.server.enums.Action;
+import datavault.server.exceptions.AclViolationException;
+import datavault.server.services.EventsService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,16 +15,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/events")
 @Slf4j
 public class EventsController {
+    @Autowired
+    EventsService eventsService;
 
     @PostMapping
-    public ResponseEntity<String> newEvent(@RequestBody EventDTO event) {
-        log.info("Event was captured, {} tried to {} file with id: '{}'", event.user(), event.action(), event.fileID());
+    public ResponseEntity<String> newEvent(@RequestBody EventDTO event) throws AclViolationException {
+        log.info("Event was captured, {} tried to {} file with id: '{}'",
+                event.user(),
+                event.action().name().toLowerCase(),
+                event.fileID());
 
-        if (event.fileID().isEmpty() || event.action() == Action.MANAGE) {
-            log.warn("Blocking {} action that was made by {}", event.action(), event.user());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
+        eventsService.validateEvent(event);
         return ResponseEntity.ok().build();
     }
 }
