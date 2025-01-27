@@ -43,3 +43,19 @@ dependencies {
 tasks.withType<Test> {
 	useJUnitPlatform()
 }
+
+tasks.register("dockerize", Exec::class) {
+	dependsOn("bootJar")
+	group = "docker"
+
+	executable = "docker"
+	args = listOf("build", "-t", "jerichowalls/server:0.0.2", ".")
+}
+
+tasks.register("buildAndPush", Exec::class) {
+	dependsOn("dockerize")
+	group = "docker"
+
+	executable = "docker"
+	args = listOf("push", "jerichowalls/server:0.0.2")
+}
