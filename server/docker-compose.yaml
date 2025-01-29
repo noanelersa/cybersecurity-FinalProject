@@ -14,4 +14,26 @@ services:
     networks:
       - datavault-network
   db:
+    image: postgres:15
+    container_name: datavault-server-db
+    restart: always
+    environment:
+      POSTGRES_DB: datavault
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    ports:
+      - "5432:5432"
+    volumes:
+      - datavault-data:/var/lib/postgresql/data
+    networks:
+      - datavault-network
+
+networks:
+  datavault-network:
+    driver: bridge
+
+
+volumes:
+  datavault-data:
+  
     
