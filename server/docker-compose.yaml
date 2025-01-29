@@ -1,0 +1,17 @@
+services:
+  server:
+    image: jerichowalls/server:0.0.2
+    container_name: datavault-server
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/datavault
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+    networks:
+      - datavault-network
+  db:
+    
