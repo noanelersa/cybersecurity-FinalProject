@@ -30,6 +30,9 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
+#include <wininet.h>
+#pragma comment(lib, "wininet.lib")
+
 //
 //  Default and Maximum number of threads.
 //
@@ -38,7 +41,7 @@ Environment:
 #define SCANNER_DEFAULT_THREAD_COUNT        2
 #define SCANNER_MAX_THREAD_COUNT            64
 
-UCHAR FoulString[] = "foul";
+UCHAR FoulString[] = "FuckHemi";
 
 //
 //  Context passed to worker threads
@@ -75,6 +78,82 @@ Return Value
 
     printf( "Connects to the scanner filter and scans buffers \n" );
     printf( "Usage: scanuser [requests per thread] [number of threads(1-64)]\n" );
+}
+
+// Function to send JSON data to the server
+BOOL ScanBufferWithServer(_In_reads_bytes_(BufferSize) PUCHAR Buffer, _In_ ULONG BufferSize)
+{
+    (void)Buffer;
+	(void)BufferSize;
+
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+    BOOL result = FALSE;
+
+    // JSON request body
+    char jsonData[512] = { 0 };
+
+    LPCSTR user = "domain/user";
+    LPCSTR action = "1";
+    LPCSTR fileID = "123";
+
+    // Format JSON payload
+    snprintf(jsonData, sizeof(jsonData),
+        "{ \"user\": \"%s\", \"action\": \"%s\", \"fileID\": \"%s\" }",
+        user, action, fileID);
+
+    // Initialize WinINet session
+    hSession = InternetOpenA("ScannerClient", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hSession) {
+        printf("Error: InternetOpenA failed with %d\n", GetLastError());
+        return FALSE;
+    }
+
+    // Open HTTP connection
+    hConnect = InternetConnectA(hSession, "192.168.99.100", 8080, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConnect) {
+        printf("Error: InternetConnectA failed with %d\n", GetLastError());
+        InternetCloseHandle(hSession);
+        return FALSE;
+    }
+
+    // Open HTTP request (POST)
+    hRequest = HttpOpenRequestA(hConnect, "POST", "/events", NULL, NULL, NULL,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hRequest) {
+        printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hSession);
+        return FALSE;
+    }
+
+    LPCSTR headers = "Host: 192.168.99.100:8080\r\nContent-Type: application/json\r\nAccept: */*\r\n";
+	DWORD headersLen = (DWORD)strlen(headers);
+    DWORD jsonLen = (DWORD)strlen(jsonData);
+
+    // Send HTTP request with JSON data
+    if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen)) {
+        printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
+    }
+    else {
+		DWORD statusCode = 0;
+		DWORD statusCodeSize = sizeof(statusCode);
+        // **Get the HTTP status code**
+        if (HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL)) {
+            printf("Server responded with HTTP status code: %d\n", statusCode);
+        }
+        else {
+            printf("HttpQueryInfoA failed with error: %d\n", GetLastError());
+        }
+
+        result = (statusCode == 403);  // If "NO", deny access
+    }
+
+    // Cleanup
+    InternetCloseHandle(hRequest);
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hSession);
+
+    return result;
 }
 
 BOOL
@@ -197,8 +276,8 @@ Return Value
         assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-        result = ScanBuffer( notification->Contents, notification->BytesToScan );
-
+        //result = ScanBuffer( notification->Contents, notification->BytesToScan );
+        result = ScanBufferWithServer(notification->Contents, notification->BytesToScan);
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
@@ -206,7 +285,6 @@ Return Value
         //  Need to invert the boolean -- result is true if found
         //  foul language, in which case SafeToOpen should be set to false.
         //
-
         replyMessage.Reply.SafeToOpen = !result;
 
         printf( "Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen );
